@@ -12,13 +12,19 @@ public class BatchJobKafkaListener {
     private final JobOperator jobOperator;
     private final Job textToCsvJob;
     private final Job csvToTextJob;
+    private final Job itemToCsvJob;
+    private final Job controlItemToCsvJob;
 
     public BatchJobKafkaListener(JobOperator jobOperator,
                                  Job textToCsvJob,
-                                 Job csvToTextJob) {
+                                 Job csvToTextJob,
+                                 Job itemToCsvJob,
+                                 Job controlItemToCsvJob) {
         this.jobOperator = jobOperator;
         this.textToCsvJob = textToCsvJob;
         this.csvToTextJob = csvToTextJob;
+        this.itemToCsvJob = itemToCsvJob;
+        this.controlItemToCsvJob = controlItemToCsvJob;
     }
 
     @KafkaListener(topics = "batch-job-trigger", groupId = "batch-poc-group")
@@ -31,6 +37,8 @@ public class BatchJobKafkaListener {
         Job jobToRun = switch (message.getJobType()) {
             case "TEXT_TO_CSV" -> textToCsvJob;
             case "CSV_TO_TEXT" -> csvToTextJob;
+            case "ITEM_TO_CSV" -> itemToCsvJob;
+            case "CONTROL_ITEM_TO_CSV" -> controlItemToCsvJob;
             default -> throw new IllegalArgumentException("Unknown jobType: " + message.getJobType());
         };
 

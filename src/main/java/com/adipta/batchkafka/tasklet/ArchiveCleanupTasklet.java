@@ -2,6 +2,7 @@ package com.adipta.batchkafka.tasklet;
 
 import com.adipta.batchkafka.audit.AuditService;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.ExitStatus;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.StepContribution;
@@ -18,11 +19,12 @@ import java.nio.file.StandardCopyOption;
  * a row to the shared audit table. jobName/direction are supplied per
  * job so the audit row is meaningful for all three job variants.
  */
+@Slf4j
 public class ArchiveCleanupTasklet implements Tasklet {
 
     private final String inputFilePath;
     private final String jobName;
-    private final String direction; // "TEXT_TO_CSV" | "CSV_TO_TEXT" | "TEXT_TO_DB"
+    private final String direction; // "TEXT_TO_CSV" | "CSV_TO_TEXT" | "ITEM_TO_CSV" | "CONTROL_ITEM_TO_CSV"
     private final AuditService auditService;
 
     public ArchiveCleanupTasklet(String inputFilePath, String jobName,
@@ -51,11 +53,11 @@ public class ArchiveCleanupTasklet implements Tasklet {
             Files.createDirectories(archiveDir);
             Path target = archiveDir.resolve(source.getName());
             Files.move(source.toPath(), target, StandardCopyOption.REPLACE_EXISTING);
-            System.out.println("[ARCHIVE] Moved " + inputFilePath + " -> " + target);
+            log.info("[ARCHIVE] Moved {} -> {}", inputFilePath, target);
         } catch (Exception e) {
             status = "ARCHIVE_FAILED";
             contribution.setExitStatus(ExitStatus.FAILED);
-            System.err.println("[ARCHIVE] Failed to archive " + inputFilePath + ": " + e.getMessage());
+            log.error("[ARCHIVE] Failed to archive {}: {}", inputFilePath, e.getMessage(), e);
         }
 
         auditService.recordJobRun(jobName, direction, source.getName(), rowsProcessed, status);

@@ -6,16 +6,16 @@
 -- want Boot to run it automatically on startup).
 -- ============================================================
 
--- Shared across ALL THREE jobs (text->csv, csv->text, text->db).
+-- Shared across ALL FOUR jobs (text->csv, csv->text, item->csv, control-item->csv).
 -- One row per job execution, written by the archive tasklet at the
 -- very end of each run. This is the table you query live during the
 -- demo to show "here's every job run, regardless of direction."
 CREATE TABLE IF NOT EXISTS processed_files (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    -- Which Job ran: "textToCsvJob" | "csvToTextJob" | "textToDbJob"
+    -- Which Job ran: "textToCsvJob" | "csvToTextJob" | "itemToCsvJob" | "controlItemToCsvJob"
     job_name VARCHAR(100) NOT NULL,
     -- Redundant with job_name but query-friendlier for filtering/grouping
-    -- during the demo: "TEXT_TO_CSV" | "CSV_TO_TEXT" | "TEXT_TO_DB"
+    -- during the demo: "TEXT_TO_CSV" | "CSV_TO_TEXT" | "ITEM_TO_CSV" | "CONTROL_ITEM_TO_CSV"
     direction VARCHAR(30)  NOT NULL,
     -- Name of the source file that was processed (not full path --
     -- keeps this table readable; full path is in Batch's own
@@ -35,17 +35,4 @@ CREATE TABLE IF NOT EXISTS processed_files (
     -- file" or "show me every run today"
     INDEX idx_job_name (job_name),
     INDEX idx_run_at (run_at)
-);
-
--- Used ONLY by the text-to-DB variant job's chunk step. This is where
--- the JdbcBatchItemWriter lands rows instead of writing to a CSV file --
--- your strongest talking point since it mirrors the real project's
--- Kafka-consumer-into-DB pattern most closely.
-CREATE TABLE IF NOT EXISTS transformed_records (
-    id BIGINT AUTO_INCREMENT PRIMARY KEY,
-    field1 VARCHAR(255),
-    field2 VARCHAR(255),
-    field3 VARCHAR(255),
-    created_at DATETIME NOT NULL,
-    INDEX idx_created_at (created_at)
 );

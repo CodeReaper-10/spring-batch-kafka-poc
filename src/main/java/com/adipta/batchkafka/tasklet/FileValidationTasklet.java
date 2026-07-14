@@ -1,5 +1,6 @@
 package com.adipta.batchkafka.tasklet;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.batch.core.step.StepContribution;
 import org.springframework.batch.core.scope.context.ChunkContext;
 import org.springframework.batch.core.step.tasklet.Tasklet;
@@ -10,8 +11,9 @@ import java.io.File;
 /**
  * Validates that the source file exists and is readable before the
  * chunk step runs. Path is injected as a late-binding job parameter
- * so this single tasklet can be reused across all three jobs.
+ * so this single tasklet can be reused across all jobs.
  */
+@Slf4j
 public class FileValidationTasklet implements Tasklet {
 
     private final String inputFilePath;
@@ -39,7 +41,7 @@ public class FileValidationTasklet implements Tasklet {
                 .getExecutionContext()
                 .putString("validatedFilePath", inputFilePath);
 
-        System.out.println("[VALIDATE] OK: " + inputFilePath + " (" + file.length() + " bytes)");
+        log.info("[VALIDATE] OK: {} ({} bytes)", inputFilePath, file.length());
         return RepeatStatus.FINISHED;
     }
 }

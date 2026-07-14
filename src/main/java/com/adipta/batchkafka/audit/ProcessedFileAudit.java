@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.Clock;
 import java.time.LocalDateTime;
 
 @Entity
@@ -22,7 +23,7 @@ public class ProcessedFileAudit {
     private String jobName;
 
     @Column(name = "direction", nullable = false)
-    private String direction; // TEXT_TO_CSV | CSV_TO_TEXT | TEXT_TO_DB
+    private String direction; // TEXT_TO_CSV | CSV_TO_TEXT | ITEM_TO_CSV | CONTROL_ITEM_TO_CSV
 
     @Column(name = "file_name", nullable = false)
     private String fileName;
@@ -36,12 +37,12 @@ public class ProcessedFileAudit {
     @Column(name = "run_at", nullable = false)
     private LocalDateTime runAt;
 
-    public ProcessedFileAudit(String jobName, String direction, String fileName, Long rowsProcessed, String status) {
+    public ProcessedFileAudit(String jobName, String direction, String fileName, Long rowsProcessed, String status, Clock clock) {
         this.jobName = jobName;
         this.direction = direction;
         this.fileName = fileName;
         this.rowsProcessed = rowsProcessed;
         this.status = status;
-        this.runAt = LocalDateTime.now();
+        this.runAt = LocalDateTime.now(clock);
     }
 }

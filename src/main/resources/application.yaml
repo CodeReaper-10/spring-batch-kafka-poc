@@ -8,8 +8,8 @@ spring:
 
   datasource:
     url: jdbc:mysql://localhost:3306/batchpoc?createDatabaseIfNotExist=true
-    username: admin
-    password: admin
+    username: batchuser
+    password: batchpass
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
