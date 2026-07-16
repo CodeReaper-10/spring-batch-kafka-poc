@@ -18,14 +18,15 @@ Batch's own `JobRepository` metadata for restart and fault-tolerance support.
 
 ## Why four jobs, one shape
 
-| Job | Reader source | Writer target | Demonstrates |
-|---|---|---|---|
-| `textToCsvJob` | Text file | CSV file | Chunk-oriented processing, high-volume line-by-line transform |
-| `csvToTextJob` | CSV file | Text file | Mirror-image chunk step, different reader/writer types |
-| `itemToCsvJob` | `item.json` | CSV file | Single-record tasklet (not chunked) that flattens a JSON object; `upcList` array explodes into numbered `upc1..upcN` columns | 
-| `controlItemToCsvJob` | `Control_Item.json` | 2 CSV files | Flattens a deeply nested JSON object; the unbounded `stores[]` array is written to a separate related CSV (one row per store, linked back by `slin`) instead of numbered columns |
+| Job                   | Reader source       | Writer target | Demonstrates                                                                                                                                                                     |
+|-----------------------|---------------------|---------------|----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `textToCsvJob`        | Text file           | CSV file      | Chunk-oriented processing, high-volume line-by-line transform                                                                                                                    |
+| `csvToTextJob`        | CSV file            | Text file     | Mirror-image chunk step, different reader/writer types                                                                                                                           |
+| `itemToCsvJob`        | `item.json`         | CSV file      | Single-record tasklet (not chunked) that flattens a JSON object; `upcList` array explodes into numbered `upc1..upcN` columns                                                     | 
+| `controlItemToCsvJob` | `Control_Item.json` | 2 CSV files   | Flattens a deeply nested JSON object; the unbounded `stores[]` array is written to a separate related CSV (one row per store, linked back by `slin`) instead of numbered columns |
 
 All four share:
+
 - **`FileValidationTasklet`** — confirms the source file exists/is readable before the chunk step runs
 - **`ArchiveCleanupTasklet`** — moves the processed file and writes a row to the audit table
 - **`processed_files`** audit table — one place to see every job run, any direction, any outcome

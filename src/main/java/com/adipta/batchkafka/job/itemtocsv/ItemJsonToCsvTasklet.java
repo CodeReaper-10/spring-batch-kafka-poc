@@ -20,6 +20,17 @@ import java.util.Map;
  * Reads a single item.json (entities.item) and flattens it into one
  * CSV header + one data row. upcList is exploded into numbered
  * upc1..upcN columns since its length varies per item.
+ *
+ * <p>This is a tasklet, not a chunk-oriented step, because each file
+ * holds exactly one record -- there's nothing to page through in
+ * batches. Contrast with {@code textToCsvJob}/{@code csvToTextJob},
+ * which chunk because their inputs are streams of many independent
+ * lines/rows. If a future input instead bundled many items into a
+ * single file (e.g. a JSON array of many {@code item} records), the
+ * right move would be switching this transform step to a
+ * chunk-oriented step backed by a custom {@code JsonItemReader},
+ * following that same pattern -- not forcing chunking onto a
+ * single-record file just to use the mechanism.
  */
 @Slf4j
 public class ItemJsonToCsvTasklet implements Tasklet {
@@ -36,6 +47,9 @@ public class ItemJsonToCsvTasklet implements Tasklet {
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
         ItemEnvelope envelope = objectMapper.readValue(new File(inputFilePath), ItemEnvelope.class);
+        if (envelope.getEntities() == null || envelope.getEntities().getItem() == null) {
+            throw new IllegalStateException("No entities.item found in " + inputFilePath);
+        }
         Item item = envelope.getEntities().getItem();
 
         Map<String, String> row = new LinkedHashMap<>();

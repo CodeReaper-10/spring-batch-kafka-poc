@@ -31,3 +31,7 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Input/Output Files ###
+/input/
+/output/

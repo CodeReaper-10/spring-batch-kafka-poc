@@ -19,8 +19,25 @@ import java.util.Map;
 /**
  * Reads a single Control_Item.json (entities.controlItem) and writes
  * two CSVs: one row of flat control-item fields, and one row per
- * store in the (unbounded-length) stores array, linked back to the
- * control item via slin.
+ * store in the stores array, linked back to the control item via
+ * slin.
+ *
+ * <p>This is a tasklet, not a chunk-oriented step, for the same reason
+ * as the sibling item.json tasklet: each file is exactly one record,
+ * so there's nothing to page through in chunks. The stores array's
+ * length varies per file, but stays bounded by realistic store counts
+ * (at most a few thousand, even for a large retail chain) -- small
+ * enough to hold in memory alongside the rest of the parsed document
+ * without concern. If stores (or a similar array elsewhere) ever
+ * needed to scale to hundreds of thousands of entries, a hand-coded
+ * streaming JSON parse within this same tasklet (write each row as
+ * it's parsed, rather than materializing the full list first) would
+ * be the proportionate first step, before reaching for full
+ * chunk-step machinery -- chunking's real benefit (checkpointed
+ * restart across many independent records) doesn't apply to an array
+ * living inside a single document. {@code textToCsvJob}/
+ * {@code csvToTextJob} demonstrate this project's chunk-oriented
+ * pattern for genuinely large, many-record inputs.
  */
 @Slf4j
 public class ControlItemJsonToCsvTasklet implements Tasklet {
@@ -39,34 +56,100 @@ public class ControlItemJsonToCsvTasklet implements Tasklet {
     @Override
     public RepeatStatus execute(StepContribution contribution, ChunkContext chunkContext) throws Exception {
         ControlItemEnvelope envelope = objectMapper.readValue(new File(inputFilePath), ControlItemEnvelope.class);
+        if (envelope.getEntities() == null || envelope.getEntities().getControlItem() == null) {
+            throw new IllegalStateException("No entities.controlItem found in " + inputFilePath);
+        }
         ControlItem controlItem = envelope.getEntities().getControlItem();
+
+        Map<String, String> row = buildControlItemRow(controlItem);
+        CsvWriterSupport.write(Path.of(controlItemOutputPath), List.copyOf(row.keySet()),
+                List.of(new ArrayList<>(row.values())));
+
+        List<Store> stores = controlItem.getStores() == null ? List.of() : controlItem.getStores();
+        List<List<String>> storeRows = buildStoreRows(inputFilePath, controlItem, stores);
+        List<String> storesHeader = List.of("controlItemSlin", "storeId", "storeStatus",
+                "effectiveStartDate", "effectiveEndDate");
+        CsvWriterSupport.write(Path.of(storesOutputPath), storesHeader, storeRows);
+
+        chunkContext.getStepContext().getStepExecution()
+                .getJobExecution().getExecutionContext()
+                .putLong("rowsProcessed", 1L + storeRows.size());
+
+        log.info("[TRANSFORM] Wrote {} and {} from {}", controlItemOutputPath, storesOutputPath, inputFilePath);
+        return RepeatStatus.FINISHED;
+    }
+
+    /**
+     * Builds the single control-item CSV row. upcGroups/deliveryInfoGroup
+     * fall back to an empty instance when absent so every nested getter
+     * below can be called unconditionally instead of repeating a
+     * null-guard ternary at every field.
+     */
+    private static Map<String, String> buildControlItemRow(ControlItem controlItem) {
+        UpcGroups upcGroups = controlItem.getUpcGroups() == null ? new UpcGroups() : controlItem.getUpcGroups();
+        UpcOrdering ord1 = upcGroups.getUpcForOrdering1();
+        UpcOrdering ord2 = upcGroups.getUpcForOrdering2();
+        UpcOrdering ord3 = upcGroups.getUpcForOrdering3();
+        UpcOrdering ord4 = upcGroups.getUpcForOrdering4();
+        UpcOrdering ord5 = upcGroups.getUpcForOrdering5();
+        UpcOrdering ord6 = upcGroups.getUpcForOrdering6();
+        DeliveryInfoGroup delivery = controlItem.getDeliveryInfoGroup() == null
+                ? new DeliveryInfoGroup() : controlItem.getDeliveryInfoGroup();
 
         Map<String, String> row = new LinkedHashMap<>();
         row.put("slin", controlItem.getSlin());
         row.put("version", asString(controlItem.getVersion()));
         row.put("atrPat", controlItem.getAtrPat());
-        row.put("upcOrdng1", controlItem.getUpcOrdng1());
-        row.put("upcOrdng2", controlItem.getUpcOrdng2());
-        row.put("upcOrdng3", controlItem.getUpcOrdng3());
-        row.put("upcOrdng4", controlItem.getUpcOrdng4());
-        row.put("upcOrdng5", controlItem.getUpcOrdng5());
-        row.put("upcOrdng6", controlItem.getUpcOrdng6());
+        row.put("upcOrdng1", nullToEmpty(controlItem.getUpcOrdng1()));
+        row.put("upcGroups.upcForOrdering1.upcCode", upcCode(ord1));
+        row.put("upcOrdngType1", upcType(ord1));
+        row.put("upcOrdng2", nullToEmpty(controlItem.getUpcOrdng2()));
+        row.put("upcGroups.upcForOrdering2.upcCode", upcCode(ord2));
+        row.put("upcOrdngType2", upcType(ord2));
+        row.put("upcOrdng3", nullToEmpty(controlItem.getUpcOrdng3()));
+        row.put("upcGroups.upcForOrdering3.upcCode", upcCode(ord3));
+        row.put("upcOrdngType3", upcType(ord3));
+        row.put("upcOrdng4", nullToEmpty(controlItem.getUpcOrdng4()));
+        row.put("upcGroups.upcForOrdering4.upcCode", upcCode(ord4));
+        row.put("upcOrdngType4", upcType(ord4));
+        row.put("upcOrdng5", nullToEmpty(controlItem.getUpcOrdng5()));
+        row.put("upcGroups.upcForOrdering5.upcCode", upcCode(ord5));
+        row.put("upcOrdngType5", upcType(ord5));
+        row.put("upcOrdng6", nullToEmpty(controlItem.getUpcOrdng6()));
+        row.put("upcGroups.upcForOrdering6.upcCode", upcCode(ord6));
+        row.put("upcOrdngType6", upcType(ord6));
         row.put("dlv1", asString(controlItem.getDlv1()));
+        row.put("deliveryInfoGroup.delivery1", asString(delivery.getDelivery1()));
         row.put("dlv2", asString(controlItem.getDlv2()));
+        row.put("deliveryInfoGroup.delivery2", asString(delivery.getDelivery2()));
         row.put("dlv3", asString(controlItem.getDlv3()));
+        row.put("deliveryInfoGroup.delivery3", asString(delivery.getDelivery3()));
         row.put("dlv4", asString(controlItem.getDlv4()));
+        row.put("deliveryInfoGroup.delivery4", asString(delivery.getDelivery4()));
         row.put("ld1", asString(controlItem.getLd1()));
+        row.put("deliveryInfoGroup.leadCode1", asString(delivery.getLeadCode1()));
         row.put("ld2", asString(controlItem.getLd2()));
+        row.put("deliveryInfoGroup.leadCode2", asString(delivery.getLeadCode2()));
         row.put("ld3", asString(controlItem.getLd3()));
+        row.put("deliveryInfoGroup.leadCode3", asString(delivery.getLeadCode3()));
         row.put("ld4", asString(controlItem.getLd4()));
-        row.put("hldTim1", controlItem.getHldTim1());
-        row.put("hldTim2", controlItem.getHldTim2());
-        row.put("hldTim3", controlItem.getHldTim3());
-        row.put("hldTim4", controlItem.getHldTim4());
-        row.put("shlfLif1", controlItem.getShlfLif1());
-        row.put("shlfLif2", controlItem.getShlfLif2());
-        row.put("shlfLif3", controlItem.getShlfLif3());
-        row.put("shlfLif4", controlItem.getShlfLif4());
+        row.put("deliveryInfoGroup.leadCode4", asString(delivery.getLeadCode4()));
+        row.put("hldTim1", nullToEmpty(controlItem.getHldTim1()));
+        row.put("deliveryInfoGroup.hldTim1", nullToEmpty(delivery.getHldTim1()));
+        row.put("hldTim2", nullToEmpty(controlItem.getHldTim2()));
+        row.put("deliveryInfoGroup.hldTim2", nullToEmpty(delivery.getHldTim2()));
+        row.put("hldTim3", nullToEmpty(controlItem.getHldTim3()));
+        row.put("deliveryInfoGroup.hldTim3", nullToEmpty(delivery.getHldTim3()));
+        row.put("hldTim4", nullToEmpty(controlItem.getHldTim4()));
+        row.put("deliveryInfoGroup.hldTim4", nullToEmpty(delivery.getHldTim4()));
+        row.put("shlfLif1", nullToEmpty(controlItem.getShlfLif1()));
+        row.put("deliveryInfoGroup.shlfLif1", nullToEmpty(delivery.getShlfLif1()));
+        row.put("shlfLif2", nullToEmpty(controlItem.getShlfLif2()));
+        row.put("deliveryInfoGroup.shlfLif2", nullToEmpty(delivery.getShlfLif2()));
+        row.put("shlfLif3", nullToEmpty(controlItem.getShlfLif3()));
+        row.put("deliveryInfoGroup.shlfLif3", nullToEmpty(delivery.getShlfLif3()));
+        row.put("shlfLif4", nullToEmpty(controlItem.getShlfLif4()));
+        row.put("deliveryInfoGroup.shlfLif4", nullToEmpty(delivery.getShlfLif4()));
         row.put("pattern", controlItem.getPattern());
         row.put("patternTypeAndCode", controlItem.getPatternTypeAndCode());
         row.put("patternType", controlItem.getPatternType());
@@ -113,30 +196,25 @@ public class ControlItemJsonToCsvTasklet implements Tasklet {
         row.put("refSourceName", controlItem.getRefSourceName());
         row.put("productDescription", controlItem.getProductDescription());
         row.put("uuid", controlItem.getUuid());
+        return row;
+    }
 
-        CsvWriterSupport.write(Path.of(controlItemOutputPath), List.copyOf(row.keySet()),
-                List.of(new ArrayList<>(row.values())));
-
-        List<Store> stores = controlItem.getStores() == null ? List.of() : controlItem.getStores();
-        List<String> storesHeader = List.of("controlItemSlin", "storeId", "storeStatus",
-                "effectiveStartDate", "effectiveEndDate");
+    private static List<List<String>> buildStoreRows(String inputFilePath, ControlItem controlItem, List<Store> stores) {
+        String slin = nullToEmpty(controlItem.getSlin());
         List<List<String>> storeRows = new ArrayList<>();
         for (Store store : stores) {
+            if (store == null) {
+                log.warn("[TRANSFORM] Skipping null store entry in {}", inputFilePath);
+                continue;
+            }
             storeRows.add(List.of(
-                    nullToEmpty(controlItem.getSlin()),
+                    slin,
                     nullToEmpty(store.getStoreId()),
                     nullToEmpty(store.getStoreStatus()),
                     nullToEmpty(store.getEffectiveStartDate()),
                     nullToEmpty(store.getEffectiveEndDate())));
         }
-        CsvWriterSupport.write(Path.of(storesOutputPath), storesHeader, storeRows);
-
-        chunkContext.getStepContext().getStepExecution()
-                .getJobExecution().getExecutionContext()
-                .putLong("rowsProcessed", 1L + stores.size());
-
-        log.info("[TRANSFORM] Wrote {} and {} from {}", controlItemOutputPath, storesOutputPath, inputFilePath);
-        return RepeatStatus.FINISHED;
+        return storeRows;
     }
 
     private static String asString(Object value) {
@@ -145,5 +223,13 @@ public class ControlItemJsonToCsvTasklet implements Tasklet {
 
     private static String nullToEmpty(String value) {
         return value == null ? "" : value;
+    }
+
+    private static String upcCode(UpcOrdering ordering) {
+        return ordering == null ? "" : nullToEmpty(ordering.getUpcCode());
+    }
+
+    private static String upcType(UpcOrdering ordering) {
+        return ordering == null ? "" : nullToEmpty(ordering.getUpcType());
     }
 }

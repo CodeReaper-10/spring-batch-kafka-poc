@@ -8,10 +8,16 @@ import lombok.Setter;
 import java.util.List;
 
 /**
- * upcGroups/deliveryInfoGroup are deliberately NOT mapped here -- they
- * duplicate fields already flat on this same object (upcOrdng1-6,
- * dlv1-4/ld1-4/hldTim1-4/shlfLif1-4). ignoreUnknown lets Jackson skip
- * those nested objects instead of failing to deserialize them.
+ * This JSON carries certain values in two places: flat at this level
+ * (upcOrdng1-6, dlv1-4, ld1-4, hldTim1-4, shlfLif1-4) and again nested
+ * one level down (upcGroups.upcForOrdering{n}.upcCode,
+ * deliveryInfoGroup.delivery{n}/leadCode{n}/hldTim{n}/shlfLif{n}). Both
+ * the flat fields and the nested upcGroups/deliveryInfoGroup objects
+ * are declared and mapped independently -- the two representations are
+ * never assumed to describe the same real-world value just because
+ * they're similarly named or happened to agree in one sample file.
+ * upcType has no flat counterpart and is only ever sourced from
+ * upcGroups.
  */
 @Getter
 @Setter
@@ -40,6 +46,8 @@ public class ControlItem {
     private String shlfLif2;
     private String shlfLif3;
     private String shlfLif4;
+    private UpcGroups upcGroups;
+    private DeliveryInfoGroup deliveryInfoGroup;
     private String slin;
     private Integer version;
     private String pattern;
