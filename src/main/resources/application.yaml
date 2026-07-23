@@ -5,11 +5,13 @@ spring:
   batch:
     job:
       enabled: false   # we launch jobs explicitly (Kafka listener / REST), not on startup
+    jdbc:
+      initialize-schema: always # Ensures BATCH_JOB_INSTANCE, BATCH_JOB_EXECUTION, etc., are created in MySQL
 
   datasource:
-    url: jdbc:mysql://localhost:3306/batchpoc?createDatabaseIfNotExist=true
-    username: batchuser
-    password: batchpass
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:batchpoc}?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USER:batchuser}
+    password: ${DB_PASSWORD:batchpass}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
@@ -21,14 +23,14 @@ spring:
         format_sql: true
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${KAFKA_HOST:localhost}:${KAFKA_PORT:9092}
     consumer:
       group-id: batch-poc-group
       auto-offset-reset: earliest
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
       properties:
-        spring.json.trusted.packages: "com.adipta.batchkafka.kafka"
+        spring.json.trusted.packages: "${BATCH_TRUSTED_PACKAGES:com.adipta.batchkafka.*}"
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer

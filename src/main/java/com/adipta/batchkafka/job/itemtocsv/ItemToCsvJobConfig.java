@@ -7,7 +7,6 @@ import com.adipta.batchkafka.tasklet.FileValidationTasklet;
 import org.springframework.batch.core.job.Job;
 import org.springframework.batch.core.step.Step;
 import org.springframework.batch.core.job.builder.JobBuilder;
-import org.springframework.batch.core.job.parameters.RunIdIncrementer;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
 import org.springframework.batch.core.configuration.annotation.StepScope;
@@ -75,7 +74,6 @@ public class ItemToCsvJobConfig {
                             Step transformItemToCsvStep,
                             Step archiveItemFileStep) {
         return new JobBuilder(JOB_NAME, jobRepository)
-                .incrementer(new RunIdIncrementer())
                 .start(validateItemFileStep)
                 .next(transformItemToCsvStep)
                 .next(archiveItemFileStep)
